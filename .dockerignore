@@ -1,0 +1,38 @@
+# Git
+.git
+.gitignore
+.github
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+server/Dockerfile
+
+# Target directories
+target
+server/target
+cli/target
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+.claude
+
+# Environment
+.env
+.env.local
+server/.env
+
+# Documentation
+README.md
+*.md
+
+# CI/CD
+.gitlab-ci.yml
+
+# Other
+Makefile
+schema.sql

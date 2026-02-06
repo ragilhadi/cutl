@@ -1,0 +1,40 @@
+services:
+  cutl-server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: cutl-server
+    restart: unless-stopped
+    user: "0:0"
+    ports:
+      - "3233:3233"
+    volumes:
+      # Persist SQLite database
+      - cutl-data:/data
+    environment:
+      # SQLite database path
+      - DATABASE_URL=sqlite:/data/cutl.db
+
+      # Base URL for generating short links
+      # Defaults to localhost - override with your actual domain via cloudflared
+      - BASE_URL=http://localhost:3233
+
+      # Server bind address
+      - BIND_ADDRESS=0.0.0.0:3233
+
+      # Optional: Enable authentication
+      # Uncomment and set a secure token to enable API authentication
+      # - AUTH_TOKEN=your-secret-token-here
+
+      # Optional: Set log level
+      # - RUST_LOG=info
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3233/shorten"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  cutl-data:
+    driver: local
