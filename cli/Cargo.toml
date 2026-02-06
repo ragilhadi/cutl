@@ -1,0 +1,26 @@
+[package]
+name = "cutl"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "cutl"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }
+reqwest = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+
+# Additional CLI dependencies
+console = "0.15"
+indicatif = "0.17"
+url = "2.5"
