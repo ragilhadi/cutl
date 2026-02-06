@@ -51,7 +51,9 @@ pub async fn shorten(
             .unwrap_or("");
 
         if !auth_header.starts_with("Bearer ") || auth_header[7..] != *token {
-            return Err(ApiError::unauthorized("Invalid or missing authorization token"));
+            return Err(ApiError::unauthorized(
+                "Invalid or missing authorization token",
+            ));
         }
     }
 
@@ -78,7 +80,10 @@ pub async fn shorten(
             .map_err(|e| ApiError::internal(format!("Database error: {}", e)))?;
 
         if exists {
-            return Err(ApiError::conflict(format!("Code '{}' already exists", custom_code)));
+            return Err(ApiError::conflict(format!(
+                "Code '{}' already exists",
+                custom_code
+            )));
         }
 
         custom_code

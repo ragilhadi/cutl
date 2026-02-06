@@ -31,12 +31,9 @@ impl Config {
     /// - `AUTH_TOKEN`: Optional bearer token for API auth
     pub fn from_env() -> Result<Self> {
         Ok(Self {
-            database_url: env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "sqlite:cutl.db".to_string()),
-            base_url: env::var("BASE_URL")
-                .unwrap_or_else(|_| "http://localhost:3000".to_string()),
-            bind_address: env::var("BIND_ADDRESS")
-                .unwrap_or_else(|_| "0.0.0.0:3000".to_string()),
+            database_url: env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:cutl.db".to_string()),
+            base_url: env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:3000".to_string()),
+            bind_address: env::var("BIND_ADDRESS").unwrap_or_else(|_| "0.0.0.0:3000".to_string()),
             auth_token: env::var("AUTH_TOKEN").ok(),
         })
     }
@@ -68,7 +65,7 @@ mod tests {
         std::env::remove_var("BASE_URL");
         std::env::remove_var("BIND_ADDRESS");
         std::env::remove_var("AUTH_TOKEN");
-        
+
         std::env::set_var("DATABASE_URL", "sqlite:test.db");
         let config = Config::from_env().unwrap();
         assert_eq!(config.database_url, "sqlite:test.db");
@@ -82,7 +79,7 @@ mod tests {
         std::env::remove_var("BASE_URL");
         std::env::remove_var("BIND_ADDRESS");
         std::env::remove_var("AUTH_TOKEN");
-        
+
         std::env::set_var("BASE_URL", "https://cutl.example.com");
         let config = Config::from_env().unwrap();
         assert_eq!(config.base_url, "https://cutl.example.com");
@@ -96,7 +93,7 @@ mod tests {
         std::env::remove_var("BASE_URL");
         std::env::remove_var("BIND_ADDRESS");
         std::env::remove_var("AUTH_TOKEN");
-        
+
         std::env::set_var("BIND_ADDRESS", "127.0.0.1:8080");
         let config = Config::from_env().unwrap();
         assert_eq!(config.bind_address, "127.0.0.1:8080");
@@ -110,7 +107,7 @@ mod tests {
         std::env::remove_var("BASE_URL");
         std::env::remove_var("BIND_ADDRESS");
         std::env::remove_var("AUTH_TOKEN");
-        
+
         std::env::set_var("AUTH_TOKEN", "secret-token-123");
         let config = Config::from_env().unwrap();
         assert_eq!(config.auth_token, Some("secret-token-123".to_string()));
@@ -124,7 +121,7 @@ mod tests {
         std::env::remove_var("BASE_URL");
         std::env::remove_var("BIND_ADDRESS");
         std::env::remove_var("AUTH_TOKEN");
-        
+
         std::env::set_var("DATABASE_URL", "sqlite:production.db");
         std::env::set_var("BASE_URL", "https://cutl.my.id");
         std::env::set_var("BIND_ADDRESS", "0.0.0.0:9000");

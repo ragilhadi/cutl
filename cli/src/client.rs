@@ -43,9 +43,7 @@ impl ApiClient {
     /// * `server_url` - Base URL of the cutl server
     /// * `auth_token` - Optional bearer token for authentication
     pub fn new(server_url: String, auth_token: Option<String>) -> Result<Self> {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()?;
+        let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
 
         Ok(Self {
             client,
@@ -80,8 +78,7 @@ impl ApiClient {
         let response_text = response.text().await?;
 
         if status.is_success() {
-            serde_json::from_str(&response_text)
-                .context("Failed to parse server response")
+            serde_json::from_str(&response_text).context("Failed to parse server response")
         } else {
             let error_msg = if let Ok(err) = serde_json::from_str::<ErrorResponse>(&response_text) {
                 err.error

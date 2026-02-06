@@ -16,8 +16,7 @@ pub fn validate_url(url: &str) -> anyhow::Result<()> {
     }
 
     // Try to parse as URL to validate further
-    let parsed = url::Url::parse(url)
-        .context("Invalid URL format")?;
+    let parsed = url::Url::parse(url).context("Invalid URL format")?;
 
     // Reject localhost and 127.0.0.1
     let host = parsed.host_str().unwrap_or("");
@@ -43,7 +42,10 @@ pub fn validate_code(code: &str) -> anyhow::Result<()> {
     }
 
     // Check characters: only alphanumeric, hyphen, and underscore
-    if !code.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+    if !code
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
         bail!("Code can only contain letters, numbers, hyphens, and underscores");
     }
 
@@ -67,9 +69,7 @@ pub fn validate_ttl_format(ttl: &str) -> anyhow::Result<()> {
     let (num_str, unit) = ttl.split_at(ttl.len() - 1);
 
     // Check that the number part is valid
-    num_str
-        .parse::<u64>()
-        .context("Invalid TTL number")?;
+    num_str.parse::<u64>().context("Invalid TTL number")?;
 
     // Check that the unit is valid
     match unit {

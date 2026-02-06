@@ -31,7 +31,12 @@ impl Config {
     /// * `code` - Optional custom short code
     /// * `ttl` - Optional time-to-live
     /// * `server` - Optional server URL override
-    pub fn new(url: String, code: Option<String>, ttl: Option<String>, server: Option<String>) -> Self {
+    pub fn new(
+        url: String,
+        code: Option<String>,
+        ttl: Option<String>,
+        server: Option<String>,
+    ) -> Self {
         let server_url = server
             .or_else(|| env::var("CUTL_SERVER").ok())
             .unwrap_or_else(|| "https://cutl.my.id".to_string());
@@ -54,12 +59,7 @@ mod tests {
 
     #[test]
     fn test_config_new_basic() {
-        let config = Config::new(
-            "https://example.com".to_string(),
-            None,
-            None,
-            None,
-        );
+        let config = Config::new("https://example.com".to_string(), None, None, None);
         assert_eq!(config.url, "https://example.com");
         assert!(config.code.is_none());
         assert!(config.ttl.is_none());

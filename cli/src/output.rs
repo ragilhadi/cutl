@@ -26,9 +26,17 @@ pub fn print_success(result: &crate::client::ShortenResponse) {
     let green = Style::new().green();
 
     println!();
-    println!("{} {}", green.apply_to("✓"), bold.apply_to("Short URL created"));
+    println!(
+        "{} {}",
+        green.apply_to("✓"),
+        bold.apply_to("Short URL created")
+    );
     println!();
-    println!("  {} {}", dim.apply_to("Short URL:"), bold.apply_to(&result.short_url));
+    println!(
+        "  {} {}",
+        dim.apply_to("Short URL:"),
+        bold.apply_to(&result.short_url)
+    );
     println!(
         "  {} {}",
         dim.apply_to("Code:"),

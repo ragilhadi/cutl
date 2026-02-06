@@ -57,7 +57,9 @@ pub fn validate_url(url: &str) -> anyhow::Result<()> {
     // Reject localhost and 127.0.0.1
     let url_lower = url.to_lowercase();
     if url_lower.contains("localhost") || url_lower.contains("127.0.0.1") {
-        return Err(anyhow::anyhow!("URL cannot point to localhost or 127.0.0.1"));
+        return Err(anyhow::anyhow!(
+            "URL cannot point to localhost or 127.0.0.1"
+        ));
     }
 
     Ok(())
@@ -117,7 +119,12 @@ pub fn parse_ttl(ttl: &str) -> anyhow::Result<i64> {
         "m" => num * 60,
         "h" => num * 60 * 60,
         "d" => num * 24 * 60 * 60,
-        _ => return Err(anyhow::anyhow!("Invalid TTL unit: {}. Use s, m, h, or d", unit)),
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Invalid TTL unit: {}. Use s, m, h, or d",
+                unit
+            ))
+        }
     };
 
     // Validate range

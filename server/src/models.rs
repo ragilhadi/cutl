@@ -2,7 +2,10 @@
 //!
 //! Defines request/response types and domain models.
 
-use axum::{http::StatusCode, response::{IntoResponse, Json}};
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Json},
+};
 use serde::{Deserialize, Serialize};
 
 /// Application state shared across all request handlers
@@ -83,7 +86,11 @@ impl ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
-        (self.status, Json(serde_json::json!({"error": self.message}))).into_response()
+        (
+            self.status,
+            Json(serde_json::json!({"error": self.message})),
+        )
+            .into_response()
     }
 }
 

@@ -74,11 +74,14 @@ async fn main() -> Result<()> {
     let spinner = output::create_spinner("Shortening URL...");
 
     // Send the request
-    let result = match client.shorten(client::ShortenRequest {
-        url: config.url,
-        code: config.code,
-        ttl: config.ttl,
-    }).await {
+    let result = match client
+        .shorten(client::ShortenRequest {
+            url: config.url,
+            code: config.code,
+            ttl: config.ttl,
+        })
+        .await
+    {
         Ok(response) => response,
         Err(e) => {
             spinner.finish_and_clear();

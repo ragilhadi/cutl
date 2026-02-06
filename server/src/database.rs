@@ -99,12 +99,14 @@ pub async fn get_link(pool: &Pool<Sqlite>, code: &str) -> Result<Option<Link>> {
     .fetch_optional(pool)
     .await?;
 
-    Ok(result.map(|(code, original_url, expires_at, created_at)| Link {
-        code,
-        original_url,
-        expires_at,
-        created_at,
-    }))
+    Ok(
+        result.map(|(code, original_url, expires_at, created_at)| Link {
+            code,
+            original_url,
+            expires_at,
+            created_at,
+        }),
+    )
 }
 
 /// Deletes a link by its short code

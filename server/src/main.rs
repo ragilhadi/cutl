@@ -15,7 +15,10 @@ mod models;
 mod utils;
 
 use crate::{config::Config, database::delete_expired_links, models::AppState, utils::now_unix};
-use axum::{routing::{get, post}, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use std::time::Duration;
 use tokio::time::interval;
 use tower_http::trace::TraceLayer;
