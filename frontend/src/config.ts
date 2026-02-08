@@ -1,7 +1,24 @@
-// For development, use the production API with CORS (once CORS is deployed)
+// ============================================================================
+// API Configuration
+// ============================================================================
+// Choose ONE of the following configurations based on your deployment:
+
+// OPTION 1: Production API (default)
+// Frontend deployed to Vercel/Netlify/GitHub Pages calling production API
 export const API_BASE_URL = 'https://cutl.my.id';
-
-// OR for local development with a local API server:
-// export const API_BASE_URL = 'http://localhost:8080';
-
 export const SHORTEN_ENDPOINT = `${API_BASE_URL}/shorten`;
+
+// OPTION 2: Docker Compose (frontend + backend on same host)
+// Uncomment this when using docker-compose:
+// export const API_BASE_URL = ''; // Empty for same-origin
+// export const SHORTEN_ENDPOINT = '/shorten';
+
+// OPTION 3: Local development with local backend
+// Uncomment this for local development:
+// export const API_BASE_URL = 'http://localhost:3233';
+// export const SHORTEN_ENDPOINT = `${API_BASE_URL}/shorten`;
+
+// OPTION 4: Custom backend URL
+// export const API_BASE_URL = 'https://your-custom-domain.com';
+// export const SHORTEN_ENDPOINT = `${API_BASE_URL}/shorten`;
+

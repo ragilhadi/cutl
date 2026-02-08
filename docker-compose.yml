@@ -1,4 +1,18 @@
 services:
+  # Frontend web UI (optional - can be deployed separately)
+  cutl-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cutl-frontend
+    restart: unless-stopped
+    ports:
+      - "3234:3234"
+    # Note: Frontend calls API at configured URL in src/config.ts
+    # By default it calls https://cutl.my.id/shorten
+    # For local development, change to http://localhost:3233
+
+  # Backend API server
   cutl-server:
     build:
       context: .
@@ -38,3 +52,6 @@ services:
 volumes:
   cutl-data:
     driver: local
+
+# Note: Services are on the default network. Remove 'networks' from frontend service
+
