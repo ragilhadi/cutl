@@ -11,10 +11,14 @@
 mod config;
 mod database;
 mod handlers;
+mod middleware;
 mod models;
 mod utils;
 
-use crate::{config::Config, database::delete_expired_links, models::AppState, utils::now_unix};
+use crate::{
+    config::Config, database::delete_expired_links, middleware::create_rate_limiter,
+    models::AppState, utils::now_unix,
+};
 use axum::{
     routing::{get, post},
     Router,
@@ -46,6 +50,10 @@ async fn main() -> anyhow::Result<()> {
     info!("Database: {}", config.database_url);
     info!("Base URL: {}", config.base_url);
     info!("Bind address: {}", config.bind_address);
+    info!(
+        "Rate limit: {} requests/minute (burst: {})",
+        config.rate_limit, config.rate_limit_burst
+    );
 
     // Create database connection pool
     let db = database::create_pool(&config.database_url).await?;
@@ -66,9 +74,16 @@ async fn main() -> anyhow::Result<()> {
         cleanup_task(cleanup_state).await;
     });
 
+    // Create rate limiter
+    let rate_limiter = create_rate_limiter(config.rate_limit, config.rate_limit_burst);
+
     // Build the router
     let app = Router::new()
+        // Rate-limited routes for shortening
         .route("/shorten", post(handlers::shorten))
+        .route("/api/shorten", post(handlers::shorten_noauth))
+        .layer(rate_limiter)
+        // Public redirect (no rate limit)
         .route("/{code}", get(handlers::redirect))
         .layer(TraceLayer::new_for_http())
         .with_state(state);

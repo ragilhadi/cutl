@@ -175,3 +175,92 @@ async fn generate_unique_code(db: &sqlx::Pool<sqlx::Sqlite>) -> Result<String, A
         "Failed to generate unique code after multiple attempts",
     ))
 }
+
+/// POST /api/shorten - Creates short link without auth (for web UI)
+///
+/// Same logic as shorten() but without authentication check.
+/// Rate limiting is applied via middleware.
+///
+/// # Request Body
+/// ```json
+/// {
+///   "url": "https://example.com",
+///   "code": "optional_custom_code",
+///   "ttl": "3d"
+/// }
+/// ```
+///
+/// # Response (200 OK)
+/// ```json
+/// {
+///   "code": "abc123",
+///   "short_url": "https://cutl.my.id/abc123",
+///   "expires_at": 1760000000
+/// }
+/// ```
+///
+/// # Errors
+/// - 400: Invalid URL, code, or TTL
+/// - 409: Code already exists
+/// - 429: Rate limit exceeded
+/// - 500: Internal server error
+pub async fn shorten_noauth(
+    State(state): State<AppState>,
+    Json(req): Json<ShortenRequest>,
+) -> Result<Json<ShortenResponse>, ApiError> {
+    // NO auth check - this endpoint is for public web UI use
+    // Rate limiting still applies via middleware
+
+    // Validate URL
+    validate_url(&req.url).map_err(|e| ApiError::bad_request(format!("Invalid URL: {}", e)))?;
+
+    // Parse TTL or use default (7 days)
+    let ttl_seconds = if let Some(ref ttl_str) = req.ttl {
+        parse_ttl(ttl_str).map_err(|e| ApiError::bad_request(format!("Invalid TTL: {}", e)))?
+    } else {
+        // Default TTL: 7 days
+        7 * 24 * 60 * 60
+    };
+
+    // Get or generate short code
+    let code = if let Some(custom_code) = req.code {
+        // Validate custom code format
+        validate_code(&custom_code)
+            .map_err(|e| ApiError::bad_request(format!("Invalid code: {}", e)))?;
+
+        // Check if code already exists
+        let exists = code_exists(&state.db, &custom_code)
+            .await
+            .map_err(|e| ApiError::internal(format!("Database error: {}", e)))?;
+
+        if exists {
+            return Err(ApiError::conflict(format!(
+                "Code '{}' already exists",
+                custom_code
+            )));
+        }
+
+        custom_code
+    } else {
+        // Generate unique random code
+        generate_unique_code(&state.db).await?
+    };
+
+    // Calculate expiration timestamp
+    let expires_at = now_unix() + ttl_seconds;
+
+    // Insert into database
+    insert_link(&state.db, &code, &req.url, expires_at, now_unix())
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to save link: {}", e)))?;
+
+    // Build response
+    let short_url = format!("{}/{}", state.base_url.trim_end_matches('/'), code);
+    info!("Created short link: {} -> {}", short_url, req.url);
+
+    Ok(Json(ShortenResponse {
+        code,
+        short_url,
+        expires_at,
+    }))
+}

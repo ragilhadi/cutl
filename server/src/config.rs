@@ -19,6 +19,12 @@ pub struct Config {
 
     /// Optional bearer token for API authentication
     pub auth_token: Option<String>,
+
+    /// Rate limit: maximum requests per minute (default: 10)
+    pub rate_limit: u32,
+
+    /// Rate limit burst size (default: 2)
+    pub rate_limit_burst: u32,
 }
 
 impl Config {
@@ -29,12 +35,22 @@ impl Config {
     /// - `BASE_URL`: Base URL for short links (default: "http://localhost:3000")
     /// - `BIND_ADDRESS`: Server bind address (default: "0.0.0.0:3000")
     /// - `AUTH_TOKEN`: Optional bearer token for API auth
+    /// - `RATE_LIMIT`: Rate limit requests per minute (default: 10)
+    /// - `RATE_LIMIT_BURST`: Rate limit burst size (default: 2)
     pub fn from_env() -> Result<Self> {
         Ok(Self {
             database_url: env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:cutl.db".to_string()),
             base_url: env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:3000".to_string()),
             bind_address: env::var("BIND_ADDRESS").unwrap_or_else(|_| "0.0.0.0:3000".to_string()),
             auth_token: env::var("AUTH_TOKEN").ok(),
+            rate_limit: env::var("RATE_LIMIT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(10),
+            rate_limit_burst: env::var("RATE_LIMIT_BURST")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(2),
         })
     }
 }
@@ -50,12 +66,16 @@ mod tests {
             base_url: "http://localhost:3000".to_string(),
             bind_address: "0.0.0.0:3000".to_string(),
             auth_token: Some("token".to_string()),
+            rate_limit: 10,
+            rate_limit_burst: 2,
         };
 
         assert_eq!(config.database_url, "sqlite:test.db");
         assert_eq!(config.base_url, "http://localhost:3000");
         assert_eq!(config.bind_address, "0.0.0.0:3000");
         assert_eq!(config.auth_token, Some("token".to_string()));
+        assert_eq!(config.rate_limit, 10);
+        assert_eq!(config.rate_limit_burst, 2);
     }
 
     #[test]
@@ -65,6 +85,8 @@ mod tests {
             base_url: "http://localhost:3000".to_string(),
             bind_address: "0.0.0.0:3000".to_string(),
             auth_token: Some("token".to_string()),
+            rate_limit: 10,
+            rate_limit_burst: 2,
         };
 
         // Test Clone trait
@@ -123,17 +145,23 @@ mod tests {
         std::env::set_var("BASE_URL", "https://cutl.my.id");
         std::env::set_var("BIND_ADDRESS", "0.0.0.0:9000");
         std::env::set_var("AUTH_TOKEN", "prod-token");
+        std::env::set_var("RATE_LIMIT", "20");
+        std::env::set_var("RATE_LIMIT_BURST", "5");
 
         let config = Config::from_env().unwrap();
         assert_eq!(config.database_url, "sqlite:production.db");
         assert_eq!(config.base_url, "https://cutl.my.id");
         assert_eq!(config.bind_address, "0.0.0.0:9000");
         assert_eq!(config.auth_token, Some("prod-token".to_string()));
+        assert_eq!(config.rate_limit, 20);
+        assert_eq!(config.rate_limit_burst, 5);
 
         // Cleanup
         std::env::remove_var("DATABASE_URL");
         std::env::remove_var("BASE_URL");
         std::env::remove_var("BIND_ADDRESS");
         std::env::remove_var("AUTH_TOKEN");
+        std::env::remove_var("RATE_LIMIT");
+        std::env::remove_var("RATE_LIMIT_BURST");
     }
 }
