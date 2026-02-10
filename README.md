@@ -54,6 +54,8 @@ cutl/
 
 ### Install from GitHub Release (Easiest)
 
+#### Linux / macOS / Git Bash
+
 Download and install the latest release with a single command:
 
 ```bash
@@ -68,10 +70,23 @@ chmod +x install.sh
 ./install.sh
 ```
 
+#### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/ragilhadi/cutl/master/install-from-release.ps1 | iex
+```
+
+Or download and inspect the script first:
+
+```powershell
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/ragilhadi/cutl/master/install-from-release.ps1 -OutFile install.ps1
+.\install.ps1
+```
+
 The installer will:
 - Detect your OS and architecture automatically
 - Download the appropriate binary from the latest GitHub release
-- Install to `~/.local/bin/cutl` (customizable with `INSTALL_DIR`)
+- Install to `~/.local/bin/cutl` on Linux/macOS or `%LOCALAPPDATA%\cutl\bin` on Windows
 - Make the binary executable
 
 **Supported platforms:**

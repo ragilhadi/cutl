@@ -17,17 +17,26 @@ export function createInstallGuide(container: HTMLElement) {
 
       <div class="tab-content active" data-content="quick">
         <h3>Quick Install (Recommended)</h3>
+        
+        <h4>Linux / macOS / Git Bash</h4>
         <p>Run this one-line command to install the latest version:</p>
         <div class="code-block">
-          <button class="code-block-copy" data-code="quick-install">Copy</button>
-          <code id="quick-install">curl -fsSL https://raw.githubusercontent.com/ragilhadi/cutl/master/install-from-release.sh | bash</code>
+          <button class="code-block-copy" data-code="quick-install-unix">Copy</button>
+          <code id="quick-install-unix">curl -fsSL https://raw.githubusercontent.com/ragilhadi/cutl/master/install-from-release.sh | bash</code>
+        </div>
+
+        <h4>Windows (PowerShell)</h4>
+        <p>Run this command in PowerShell:</p>
+        <div class="code-block">
+          <button class="code-block-copy" data-code="quick-install-windows">Copy</button>
+          <code id="quick-install-windows">irm https://raw.githubusercontent.com/ragilhadi/cutl/master/install-from-release.ps1 | iex</code>
         </div>
 
         <p>The installer will:</p>
         <ul>
           <li>Detect your OS and architecture automatically</li>
           <li>Download the appropriate binary from the latest GitHub release</li>
-          <li>Install to <code>~/.local/bin/cutl</code></li>
+          <li>Install to <code>~/.local/bin/cutl</code> (Linux/macOS) or <code>%LOCALAPPDATA%\cutl\bin</code> (Windows)</li>
           <li>Make the binary executable</li>
         </ul>
 
@@ -41,12 +50,22 @@ export function createInstallGuide(container: HTMLElement) {
 
       <div class="tab-content" data-content="manual">
         <h3>Manual Install</h3>
+        
+        <h4>Linux / macOS / Git Bash</h4>
         <p>Download and inspect the script first:</p>
         <div class="code-block">
-          <button class="code-block-copy" data-code="manual-install">Copy</button>
-          <code id="manual-install">curl -fsSL https://raw.githubusercontent.com/ragilhadi/cutl/master/install-from-release.sh -o install.sh
+          <button class="code-block-copy" data-code="manual-install-unix">Copy</button>
+          <code id="manual-install-unix">curl -fsSL https://raw.githubusercontent.com/ragilhadi/cutl/master/install-from-release.sh -o install.sh
 chmod +x install.sh
 ./install.sh</code>
+        </div>
+
+        <h4>Windows (PowerShell)</h4>
+        <p>Download and inspect the script first:</p>
+        <div class="code-block">
+          <button class="code-block-copy" data-code="manual-install-windows">Copy</button>
+          <code id="manual-install-windows">Invoke-WebRequest -Uri https://raw.githubusercontent.com/ragilhadi/cutl/master/install-from-release.ps1 -OutFile install.ps1
+.\install.ps1</code>
         </div>
       </div>
 
