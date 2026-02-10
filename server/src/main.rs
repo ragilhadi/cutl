@@ -25,7 +25,7 @@ use axum::{
 };
 use std::time::Duration;
 use tokio::time::interval;
-use tower_http::trace::TraceLayer;
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::info;
 use tracing_subscriber::prelude::*;
 
@@ -77,6 +77,9 @@ async fn main() -> anyhow::Result<()> {
     // Create rate limiter
     let rate_limiter = create_rate_limiter(config.rate_limit, config.rate_limit_burst);
 
+    // Configure CORS to allow frontend requests
+    let cors = CorsLayer::permissive();
+
     // Build the router
     let app = Router::new()
         // Rate-limited routes for shortening
@@ -85,6 +88,7 @@ async fn main() -> anyhow::Result<()> {
         .layer(rate_limiter)
         // Public redirect (no rate limit)
         .route("/{code}", get(handlers::redirect))
+        .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

@@ -58,6 +58,20 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    // Global mutex to ensure tests that modify env vars run sequentially
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
+
+    /// Helper to clear all config-related environment variables
+    fn clear_env_vars() {
+        std::env::remove_var("DATABASE_URL");
+        std::env::remove_var("BASE_URL");
+        std::env::remove_var("BIND_ADDRESS");
+        std::env::remove_var("AUTH_TOKEN");
+        std::env::remove_var("RATE_LIMIT");
+        std::env::remove_var("RATE_LIMIT_BURST");
+    }
 
     #[test]
     fn test_config_new() {
@@ -100,6 +114,8 @@ mod tests {
 
     #[test]
     fn test_config_from_env_defaults() {
+        let _lock = ENV_MUTEX.lock().unwrap();
+        clear_env_vars();
         let config = Config::from_env().unwrap();
         assert_eq!(config.database_url, "sqlite:cutl.db");
         assert_eq!(config.base_url, "http://localhost:3000");
@@ -109,6 +125,8 @@ mod tests {
 
     #[test]
     fn test_config_from_env_custom_database() {
+        let _lock = ENV_MUTEX.lock().unwrap();
+        clear_env_vars();
         std::env::set_var("DATABASE_URL", "sqlite:test.db");
         let config = Config::from_env().unwrap();
         assert_eq!(config.database_url, "sqlite:test.db");
@@ -117,6 +135,8 @@ mod tests {
 
     #[test]
     fn test_config_from_env_custom_base_url() {
+        let _lock = ENV_MUTEX.lock().unwrap();
+        clear_env_vars();
         std::env::set_var("BASE_URL", "https://cutl.example.com");
         let config = Config::from_env().unwrap();
         assert_eq!(config.base_url, "https://cutl.example.com");
@@ -125,6 +145,8 @@ mod tests {
 
     #[test]
     fn test_config_from_env_custom_bind_address() {
+        let _lock = ENV_MUTEX.lock().unwrap();
+        clear_env_vars();
         std::env::set_var("BIND_ADDRESS", "127.0.0.1:8080");
         let config = Config::from_env().unwrap();
         assert_eq!(config.bind_address, "127.0.0.1:8080");
@@ -133,6 +155,8 @@ mod tests {
 
     #[test]
     fn test_config_from_env_with_auth_token() {
+        let _lock = ENV_MUTEX.lock().unwrap();
+        clear_env_vars();
         std::env::set_var("AUTH_TOKEN", "secret-token-123");
         let config = Config::from_env().unwrap();
         assert_eq!(config.auth_token, Some("secret-token-123".to_string()));
@@ -141,6 +165,8 @@ mod tests {
 
     #[test]
     fn test_config_from_env_all_custom() {
+        let _lock = ENV_MUTEX.lock().unwrap();
+        clear_env_vars();
         std::env::set_var("DATABASE_URL", "sqlite:production.db");
         std::env::set_var("BASE_URL", "https://cutl.my.id");
         std::env::set_var("BIND_ADDRESS", "0.0.0.0:9000");
