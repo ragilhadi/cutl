@@ -22,5 +22,5 @@ anyhow = { workspace = true }
 
 # Additional CLI dependencies
 console = "0.15"
-indicatif = "0.17"
+indicatif = "0.18"
 url = "2.5"
