@@ -1,6 +1,9 @@
 // ── Helpers ───────────────────────────────────────────────────────
 function codeBlock(id: string, code: string): string {
-  const escaped = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const escaped = code
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
   return `
     <div class="relative group mt-3 rounded-xl bg-slate-900 dark:bg-slate-950 border border-slate-700 dark:border-slate-800 overflow-hidden">
       <pre class="overflow-x-auto p-4 text-xs text-slate-100 font-mono leading-relaxed"><code id="${id}">${escaped}</code></pre>
@@ -82,7 +85,7 @@ chmod +x install.sh
           <div>
             <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Windows (PowerShell)</h3>
             ${codeBlock('manual-win', `Invoke-WebRequest -Uri https://raw.githubusercontent.com/ragilhadi/cutl/master/install-from-release.ps1 -OutFile install.ps1
-.\\install.ps1`)}
+.\install.ps1`)}
           </div>
         </div>
 
@@ -128,20 +131,22 @@ cutl https://example.com --code docs --ttl 7d`)}
   const tabBtns = container.querySelectorAll<HTMLButtonElement>('.tab-btn');
   const tabContents = container.querySelectorAll<HTMLElement>('.tab-content');
 
+  const activeTabClasses = ['bg-white', 'dark:bg-slate-800', 'text-indigo-600', 'dark:text-indigo-400', 'shadow-sm'];
+  const inactiveTabClasses = ['text-slate-500', 'dark:text-slate-400', 'hover:text-slate-700', 'dark:hover:text-slate-300'];
+
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-tab');
       tabBtns.forEach(b => {
         const isActive = b === btn;
-        b.classList.toggle('bg-white', isActive);
-        b.classList.toggle('dark:bg-slate-800', isActive);
-        b.classList.toggle('text-indigo-600', isActive);
-        b.classList.toggle('dark:text-indigo-400', isActive);
-        b.classList.toggle('shadow-sm', isActive);
-        b.classList.toggle('text-slate-500', !isActive);
-        b.classList.toggle('dark:text-slate-400', !isActive);
-        b.classList.toggle('hover:text-slate-700', !isActive);
-        b.classList.toggle('dark:hover:text-slate-300', !isActive);
+        // Remove all state classes first
+        b.classList.remove(...activeTabClasses, ...inactiveTabClasses);
+        // Add the appropriate state classes
+        if (isActive) {
+          b.classList.add(...activeTabClasses);
+        } else {
+          b.classList.add(...inactiveTabClasses);
+        }
       });
       tabContents.forEach(c => {
         c.classList.toggle('hidden', c.id !== `tab-${id}`);
@@ -163,16 +168,28 @@ cutl https://example.com --code docs --ttl 7d`)}
           btn.classList.remove('bg-emerald-700', '!opacity-100');
         }, 2000);
       } catch {
-        // Fallback
-        const ta = document.createElement('textarea');
-        ta.value = code;
-        ta.style.cssText = 'position:fixed;left:-9999px;top:0';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        btn.textContent = 'Copied!';
-        setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+        // Fallback for older browsers that do not support navigator.clipboard
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = code;
+          ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+          document.body.appendChild(ta);
+          ta.select();
+          const successful = document.execCommand('copy');
+          document.body.removeChild(ta);
+
+          if (successful) {
+            btn.textContent = 'Copied!';
+            btn.classList.add('bg-emerald-700', '!opacity-100');
+            setTimeout(() => {
+              btn.textContent = 'Copy';
+              btn.classList.remove('bg-emerald-700', '!opacity-100');
+            }, 2000);
+          }
+        } catch (fallbackError) {
+          // Best-effort: if copying fails here, avoid claiming success
+          console.error('Copy to clipboard failed', fallbackError);
+        }
       }
     });
   });

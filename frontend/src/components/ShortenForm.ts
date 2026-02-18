@@ -111,8 +111,22 @@ export function createShortenForm(container: HTMLElement, options: ShortenFormOp
   codeInput.addEventListener('input', () => {
     const rem = 32 - codeInput.value.length;
     codeCounter.textContent = `${rem} remaining`;
-    codeCounter.classList.toggle('text-amber-500', rem < 8 && rem > 0);
-    codeCounter.classList.toggle('text-red-500', rem === 0);
+    
+    // Explicitly manage default (slate), warning (amber), and error (red) states
+    codeCounter.classList.remove(
+      'text-slate-400',
+      'dark:text-slate-500',
+      'text-amber-500',
+      'text-red-500',
+    );
+
+    if (rem === 0) {
+      codeCounter.classList.add('text-red-500');
+    } else if (rem > 0 && rem < 8) {
+      codeCounter.classList.add('text-amber-500');
+    } else {
+      codeCounter.classList.add('text-slate-400', 'dark:text-slate-500');
+    }
   });
 
   // ── TTL presets ───────────────────────────────────────────────
@@ -122,8 +136,14 @@ export function createShortenForm(container: HTMLElement, options: ShortenFormOp
   function setActivePreset(value: string | null) {
     presetBtns.forEach(btn => {
       const isActive = btn.getAttribute('data-ttl') === value;
-      activePresetCls.forEach(c => btn.classList.toggle(c, isActive));
-      inactivePresetCls.forEach(c => btn.classList.toggle(c, !isActive));
+      // Remove all state classes first
+      btn.classList.remove(...activePresetCls, ...inactivePresetCls);
+      // Add the appropriate state classes
+      if (isActive) {
+        btn.classList.add(...activePresetCls);
+      } else {
+        btn.classList.add(...inactivePresetCls);
+      }
     });
   }
 
