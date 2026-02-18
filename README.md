@@ -7,6 +7,7 @@ A simple, self-hosted URL shortener with a Rust CLI client and HTTP API server.
 - **Shorten URLs** - Convert long URLs into short links
 - **Custom Codes** - Choose your own short code or let the server generate one
 - **Expiration (TTL)** - Set how long links should last (5 minutes to 30 days)
+- **Visit Analytics** - Per-link visit stats: total counts, country/referrer breakdown, daily trends, and recent visits
 - **HTTP API** - Simple REST API for integration
 - **CLI Tool** - Easy-to-use command-line interface
 - **SQLite** - Lightweight database with no external dependencies
@@ -197,6 +198,8 @@ DATABASE_URL=sqlite:cutl.db
 BASE_URL=https://cutl.my.id
 BIND_ADDRESS=0.0.0.0:3000
 AUTH_TOKEN=optional-secret-token
+# Optional: path to GeoLite2-City.mmdb for IP geolocation in analytics
+# GEOIP_DB_PATH=/path/to/GeoLite2-City.mmdb
 ```
 
 Then run:
@@ -298,10 +301,61 @@ Authorization: Bearer <TOKEN>
 
 ### GET /{code}
 
-Redirects to the original URL.
+Redirects to the original URL and records a visit row (IP, user-agent, referrer, geo data if configured).
 
 **Response:**
 - `302 Found` - Redirects to `original_url`
+- `404 Not Found` - Link doesn't exist or has expired
+
+### GET /analytics/{code}
+
+Returns visit statistics for a short link.
+
+**Request Headers (optional, required when `AUTH_TOKEN` is set):**
+```
+Authorization: Bearer <TOKEN>
+```
+
+**Response (200 OK):**
+```json
+{
+  "code": "abc123",
+  "original_url": "https://example.com",
+  "created_at": 1739000000,
+  "expires_at": 1760000000,
+  "total_visits": 42,
+  "countries": [
+    { "value": "ID", "count": 30 },
+    { "value": "US", "count": 8 },
+    { "value": null, "count": 4 }
+  ],
+  "referers": [
+    { "value": "https://twitter.com/", "count": 15 },
+    { "value": null, "count": 27 }
+  ],
+  "daily": [
+    { "date": "2026-02-18", "count": 10 },
+    { "date": "2026-02-17", "count": 32 }
+  ],
+  "recent_visits": [
+    {
+      "visited_at": 1739900000,
+      "ip": "1.2.3.4",
+      "country": "ID",
+      "city": "Jakarta",
+      "user_agent": "Mozilla/5.0 ...",
+      "referer": null
+    }
+  ]
+}
+```
+
+- `recent_visits`: last 20 visits, newest first
+- `daily`: last 30 days, newest first
+
+**Error Responses:**
+
+- `401 Unauthorized` - Invalid or missing auth token (when `AUTH_TOKEN` is set)
 - `404 Not Found` - Link doesn't exist or has expired
 
 ## Configuration
@@ -314,6 +368,7 @@ Redirects to the original URL.
 | `BASE_URL` | Base URL for short links | `https://cutl.my.id` |
 | `BIND_ADDRESS` | Address to bind to | `0.0.0.0:3000` |
 | `AUTH_TOKEN` | Optional bearer token for API auth | (none) |
+| `GEOIP_DB_PATH` | Path to GeoLite2-City.mmdb for IP geolocation | (none) |
 | `RUST_LOG` | Log level (info/debug/trace) | (none) |
 
 ### CLI Environment Variables
@@ -362,7 +417,23 @@ CREATE TABLE links (
 );
 
 CREATE INDEX idx_links_expires_at ON links(expires_at);
+
+CREATE TABLE visits (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    code       TEXT    NOT NULL REFERENCES links(code) ON DELETE CASCADE,
+    visited_at INTEGER NOT NULL,  -- UNIX timestamp (seconds)
+    ip         TEXT,              -- raw IP address (IPv4 or IPv6)
+    country    TEXT,              -- ISO 3166-1 alpha-2 (e.g. "ID", "US")
+    city       TEXT,              -- city name, best-effort
+    user_agent TEXT,              -- full User-Agent header value
+    referer    TEXT               -- Referer header value (nullable)
+);
+
+CREATE INDEX idx_visits_code       ON visits(code);
+CREATE INDEX idx_visits_visited_at ON visits(visited_at);
 ```
+
+> **Geo data**: Country and city columns are populated only when `GEOIP_DB_PATH` is set to a valid [GeoLite2-City](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) `.mmdb` file. If unset, those columns remain `NULL` and analytics still works.
 
 ## Security
 
@@ -475,6 +546,9 @@ server {
 curl -X POST https://cutl.my.id/shorten \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com/very/long/path", "ttl": "7d"}'
+
+# Get analytics for a short link
+curl https://cutl.my.id/analytics/abc123
 ```
 
 ### Using with authentication
@@ -484,6 +558,10 @@ curl -X POST https://cutl.my.id/shorten \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-token" \
   -d '{"url": "https://example.com"}'
+
+# Analytics with auth
+curl https://cutl.my.id/analytics/abc123 \
+  -H "Authorization: Bearer your-token"
 ```
 
 ## Development
