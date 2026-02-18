@@ -2,7 +2,7 @@
 //!
 //! Includes code generation, validation, and TTL parsing.
 
-use rand::Rng;
+use rand::RngExt;
 use regex::Regex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -32,12 +32,12 @@ pub fn now_unix() -> i64 {
 ///
 /// Length is randomly chosen between 6-8 characters
 pub fn generate_code() -> String {
-    let mut rng = rand::thread_rng();
-    let length = rng.gen_range(6..=8);
+    let mut rng = rand::rng();
+    let length = rng.random_range(6..=8);
 
     (0..length)
         .map(|_| {
-            let idx = rng.gen_range(0..BASE62_CHARS.len());
+            let idx = rng.random_range(0..BASE62_CHARS.len());
             BASE62_CHARS[idx] as char
         })
         .collect()

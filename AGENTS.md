@@ -2,193 +2,156 @@
 
 ## Project Overview
 
-This is a Rust workspace for `cutl`, a self-hosted URL shortener with a CLI client and HTTP API server.
+Rust workspace for `cutl`, a self-hosted URL shortener with three components:
 
-- **Workspace members**: `server`, `cli`
+- **`server/`** — Axum HTTP API server with SQLite storage (`cutl-server`)
+- **`cli/`** — CLI client (`cutl`)
+- **`frontend/`** — Vanilla TypeScript + Vite SPA (no framework)
 - **Minimum Rust version**: 1.83
+
+## Architecture
+
+```
+CLI (cutl) ──HTTP──► Server (cutl-server) ──SQLite──► cutl.db
+                           │
+Frontend (Vite/TS) ──HTTP──┘
+```
+
+### Server Layers ([server/src/](server/src/))
+
+| File | Responsibility |
+|---|---|
+| `main.rs` | Router setup, middleware, background cleanup task |
+| `handlers.rs` | Route handlers: `shorten`, `shorten_noauth`, `redirect` |
+| `models.rs` | `AppState`, `ApiError`, request/response types |
+| `database.rs` | SQLx query functions, `run_migrations()` |
+| `middleware.rs` | Rate limiting via `tower_governor` |
+| `utils.rs` | `generate_code()`, `parse_ttl()`, `validate_url()` |
+| `config.rs` | Env var loading with defaults |
+
+### API Routes
+
+| Method | Path | Auth | Rate Limited |
+|---|---|---|---|
+| `POST` | `/shorten` | Bearer token (if `AUTH_TOKEN` set) | Yes |
+| `POST` | `/api/shorten` | None | Yes |
+| `GET` | `/{code}` | None | No |
+
+Request body: `{ "url": "...", "code": "optional", "ttl": "3d" }`
+Response: `{ "code": "abc123", "short_url": "https://cutl.my.id/abc123", "expires_at": 1760000000 }`
+
+### Database Schema ([schema.sql](schema.sql))
+
+```sql
+CREATE TABLE links (
+    code TEXT PRIMARY KEY CHECK(code REGEXP '^[a-zA-Z0-9_-]{1,32}$'),
+    original_url TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,  -- UNIX timestamp
+    created_at INTEGER NOT NULL   -- UNIX timestamp
+);
+```
+
+Migrations run automatically at startup via `database::run_migrations()` — no external tool needed.
+A `tokio::spawn` background task purges expired rows every 60 seconds.
+
+### Key Types ([server/src/models.rs](server/src/models.rs))
+
+```rust
+pub struct AppState {
+    pub db: sqlx::Pool<sqlx::Sqlite>,
+    pub base_url: String,
+    pub auth_token: Option<String>,
+}
+
+pub struct ApiError { pub status: StatusCode, pub message: String }
+// Constructors: ApiError::bad_request, ::unauthorized, ::not_found, ::conflict, ::internal
+// Implements IntoResponse → {"error": "message"} and From<anyhow::Error>
+```
 
 ## Build, Lint, and Test Commands
 
-### Building
 ```bash
-cargo build --release              # Build release binaries
-cargo build -p cutl                # Build CLI only
-cargo build -p cutl-server         # Build server only
-make build                          # Build Docker image
-```
-
-### Testing
-```bash
-cargo test --workspace              # Run all tests
-cargo test -p cutl                  # Run CLI tests only
-cargo test -p cutl-server           # Run server tests only
-make test                           # Run all tests (via Makefile)
-make test-cli                       # Run CLI tests (via Makefile)
-make test-server                    # Run server tests (via Makefile)
-```
-
-#### Running a Single Test
-```bash
-# Run a specific test function
-cargo test test_function_name --workspace
-
-# Run a test in a specific module
-cargo test module_name::test_name --manifest-path cli/Cargo.toml
-
-# Run tests matching a pattern
-cargo test validate --workspace
-
-# Run tests with output
-cargo test -- --nocapture --test-threads=1 test_name
-```
-
-### Linting and Formatting
-```bash
-cargo fmt --all                     # Format all code
-cargo fmt --all -- --check          # Check formatting without modifying
-cargo clippy --workspace --all-targets --all-features -- -D warnings  # Lint with warnings as errors
+cargo build --release                                                    # Release binaries
+cargo build -p cutl                                                      # CLI only
+cargo build -p cutl-server                                               # Server only
+cargo fmt --all                                                          # Format
+cargo fmt --all -- --check                                               # Check formatting
+cargo clippy --workspace --all-targets --all-features -- -D warnings     # Lint (CI-strict)
+cargo test --workspace                                                   # All tests
+cargo test -p cutl                                                       # CLI tests only
+cargo test -p cutl-server                                                # Server tests only
+cargo test test_function_name --workspace                                # Single test
+cargo test -- --nocapture --test-threads=1 test_name                    # With output
+make build                                                               # Docker image
 ```
 
 ## Code Style Guidelines
 
-### Imports
-- Group external imports first, then internal crate imports
-- Use `use crate::` for internal modules
-- Keep imports sorted alphabetically where sensible
-
-```rust
-use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
-use std::time::Duration;
-
-use crate::config::Config;
-use crate::models::AppState;
-```
-
-### Formatting
-- Use `cargo fmt` (4 spaces, 100 char line limit)
-- No trailing commas in single-line struct/enum definitions
-- Trailing commas in multi-line definitions
-
-### Types
-- Use `anyhow::Result<T>` for general error handling
-- Custom error types for API responses (see `models.rs`)
-- Domain models as plain structs with `#[derive(Debug, Clone)]`
-- Request/Response types with `#[derive(Deserialize)]`/`#[derive(Serialize)]`
-
-```rust
-#[derive(Debug, Clone)]
-pub struct AppState { ... }
-
-#[derive(Debug, Deserialize)]
-pub struct ShortenRequest { ... }
-```
-
-### Naming Conventions
-- Functions and variables: `snake_case`
-- Structs and enums: `PascalCase`
-- Constants: `SCREAMING_SNAKE_CASE`
-- Private fields: `snake_case` (no underscore prefix)
-- Use `#[allow(dead_code)]` for intentionally unused documented fields
-
-```rust
-pub const MAX_TTL_SECONDS: i64 = 30 * 24 * 60 * 60;
-pub fn generate_code() -> String { ... }
-pub struct ShortenRequest { pub url: String, ... }
-```
-
-### Error Handling
-- Use `anyhow::Result<T>` as return type for fallible functions
-- Use `anyhow::bail!("message")` for early returns with errors
-- Use `.context("description")` to add error context
-- For API handlers, use `ApiError` with status codes
-
-```rust
-pub fn parse_ttl(ttl: &str) -> anyhow::Result<i64> {
-    let num: i64 = num_str.parse()
-        .map_err(|_| anyhow::anyhow!("Invalid TTL number"))?;
-    if seconds < MIN_TTL_SECONDS {
-        bail!("TTL must be at least {} seconds", MIN_TTL_SECONDS);
-    }
-    Ok(seconds)
-}
-```
+- `cargo fmt`: 4 spaces, 100-char line limit
+- Trailing commas in multi-line; none in single-line definitions
+- External imports first, then `use crate::`, sorted alphabetically
+- `anyhow::Result<T>` throughout; `ApiError` only at the HTTP response boundary
+- Use `bail!("msg")` for early error returns, `.context("desc")` to add context
+- `lazy_static!` for regex patterns (see `utils.rs` for `CODE_REGEX`)
+- Constants for all magic numbers (see `MIN_TTL_SECONDS`, `MAX_TTL_SECONDS` in `utils.rs`)
 
 ### Documentation
-- Module-level: `//!` comment at top of file
-- Public functions: `///` doc comments
-- Include `# Arguments`, `# Returns`, `# Errors` sections where applicable
 
 ```rust
-//! Database operations for the cutl server
-
-/// Creates a new database connection pool
-///
-/// # Arguments
-/// * `database_url` - SQLite connection string (e.g., "sqlite:cutl.db")
-pub async fn create_pool(database_url: &str) -> Result<Pool<Sqlite>> { ... }
+//! Module-level doc with //!
+/// Public fn doc with ///
+/// # Arguments / # Returns / # Errors
 ```
 
 ### Testing
-- All functions should have corresponding unit tests
-- Tests in `#[cfg(test)] mod tests` blocks at end of files
-- Test naming: `test_<function_name>` or descriptive like `test_validate_url_valid`
-- Use `assert_eq!`, `assert!`, `assert!()` for assertions
 
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
+Tests go in `#[cfg(test)] mod tests` at the end of each file. Naming: `test_<function>` or descriptive (`test_validate_url_valid`).
 
-    #[test]
-    fn test_parse_ttl_valid() {
-        assert_eq!(parse_ttl("5m").unwrap(), 300);
-    }
+## Configuration
 
-    #[test]
-    fn test_parse_ttl_invalid() {
-        assert!(parse_ttl("invalid").is_err());
-    }
-}
+### Server env vars ([server/src/config.rs](server/src/config.rs))
+
+| Var | Default |
+|---|---|
+| `DATABASE_URL` | `sqlite:cutl.db` |
+| `BASE_URL` | `http://localhost:3000` |
+| `BIND_ADDRESS` | `0.0.0.0:3000` |
+| `AUTH_TOKEN` | _(none — disables auth on `/shorten`)_ |
+| `RATE_LIMIT` | `10` (requests/min) |
+| `RATE_LIMIT_BURST` | `2` |
+
+`.env` loaded via `dotenv` at startup.
+
+### CLI env vars ([cli/src/config.rs](cli/src/config.rs))
+
+| Var | Default |
+|---|---|
+| `CUTL_SERVER` | `https://cutl.my.id` |
+| `CUTL_TOKEN` | _(none)_ |
+
+## CLI Usage
+
+```
+cutl <URL> [--code/-c <code>] [--ttl/-t <ttl>] [--server/-s <url>]
 ```
 
-### Configuration
-- Environment variables for configuration (e.g., `DATABASE_URL`, `BASE_URL`)
-- Default values provided via `unwrap_or_else`
-- `.env` file support via `dotenv` crate (for local dev)
+TTL format: `5m`, `1h`, `3d`, `30d` — min 5m, max 30d. Code format: `[a-zA-Z0-9_-]{1,32}`.
 
-### Async/Await
-- `#[tokio::main]` for async entry points
-- `async fn` for async functions
-- Use `.await` correctly, prefer chaining over intermediate variables
+## Integration Points
 
-### Database
-- SQLx with SQLite
-- Use `?` operator for propagating errors
-- Use `sqlx::query!` or `sqlx::query_as!` for type-safe queries
-
-### HTTP Server (Axum)
-- Router with `.route("/path", handler)`
-- Extractors: `State`, `Path`, `Json`
-- Return `Result<Json<T>, ApiError>` for JSON responses
-- Return `Result<Redirect, ApiError>` for redirects
-
-### HTTP Client (Reqwest)
-- Timeout configured to 30 seconds
-- Use `.bearer_auth()` for authentication
-- Parse error responses before returning
-
-### Constants and Magic Numbers
-- Define constants for magic numbers (e.g., `MIN_TTL_SECONDS`, `MAX_TTL_SECONDS`)
-- Use `lazy_static` for regex patterns that shouldn't be recompiled
+- **Auth**: CLI sends `$CUTL_TOKEN` as `Authorization: Bearer <token>`; server validates against `$AUTH_TOKEN`
+- **Rate limiting**: `tower_governor` on `/shorten` and `/api/shorten`; IP extracted from `X-Forwarded-For`, `X-Real-IP`, `Forwarded`, or direct connection
+- **CORS**: `CorsLayer::permissive()` globally (for frontend)
+- **Frontend**: Vite dev server on port `3234`; calls `/api/shorten` (no auth required)
 
 ## CI/CD Pipeline
 
-The project uses GitHub Actions for automated checks:
-
-- **Format check**: `cargo fmt --all -- --check`
-- **Clippy**: `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-- **Tests**: `cargo test --workspace --verbose`
-- **Build**: `cargo build --workspace --verbose`
+GitHub Actions (`.github/workflows/test.yml`) on push/PR to `master`:
+1. `cargo fmt --all -- --check`
+2. `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+3. `cargo test -p cutl --verbose`
+4. `cargo test -p cutl-server --verbose`
+5. `cargo test --workspace --verbose`
+6. Build check: `cargo build` for each crate and workspace
 
 All checks must pass before merging.
