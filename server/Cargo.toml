@@ -24,7 +24,6 @@ rand = { version = "0.10", features = ["std", "std_rng", "thread_rng"] }
 regex = "1.11"
 dotenv = "0.15"
 lazy_static = "1.5"
-native-tls = "0.2.12"
 
 # Rate limiting
 governor = "0.10"
