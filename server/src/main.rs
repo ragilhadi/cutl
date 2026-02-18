@@ -61,11 +61,27 @@ async fn main() -> anyhow::Result<()> {
     // Run migrations automatically
     database::run_migrations(&db).await?;
 
+    // Initialize GeoIP reader if configured
+    let geoip =
+        config.geoip_db_path.as_ref().and_then(|path| {
+            match maxminddb::Reader::open_readfile(path) {
+                Ok(r) => {
+                    info!("GeoIP database loaded from {}", path);
+                    Some(std::sync::Arc::new(r))
+                }
+                Err(e) => {
+                    tracing::warn!("Could not load GeoIP database: {}", e);
+                    None
+                }
+            }
+        });
+
     // Create application state
     let state = AppState {
         db,
         base_url: config.base_url,
         auth_token: config.auth_token,
+        geoip,
     };
 
     // Spawn background task for cleanup
@@ -86,8 +102,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/shorten", post(handlers::shorten))
         .route("/api/shorten", post(handlers::shorten_noauth))
         .layer(rate_limiter)
-        // Public redirect (no rate limit)
+        // Public redirect and analytics (no rate limit)
         .route("/{code}", get(handlers::redirect))
+        .route("/analytics/{code}", get(handlers::analytics))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state);
