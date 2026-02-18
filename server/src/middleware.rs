@@ -1,8 +1,8 @@
 //! Rate limiting middleware
 
-use ::governor::clock::QuantaInstant;
-use ::governor::middleware::NoOpMiddleware;
-use std::sync::Arc;
+use axum::body::Body;
+use governor::clock::QuantaInstant;
+use governor::middleware::NoOpMiddleware;
 use tower_governor::{
     governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, GovernorLayer,
 };
@@ -24,19 +24,17 @@ use tower_governor::{
 pub fn create_rate_limiter(
     rate_limit: u32,
     burst_size: u32,
-) -> GovernorLayer<SmartIpKeyExtractor, NoOpMiddleware<QuantaInstant>> {
+) -> GovernorLayer<SmartIpKeyExtractor, NoOpMiddleware<QuantaInstant>, Body> {
     // Build governor configuration
     // Use per_second to calculate the rate: 60 seconds / rate_limit
     let seconds_per_request = 60u64 / rate_limit as u64;
 
-    let config = Arc::new(
-        GovernorConfigBuilder::default()
-            .key_extractor(SmartIpKeyExtractor)
-            .per_second(seconds_per_request)
-            .burst_size(burst_size)
-            .finish()
-            .unwrap(),
-    );
+    let config = GovernorConfigBuilder::default()
+        .key_extractor(SmartIpKeyExtractor)
+        .per_second(seconds_per_request)
+        .burst_size(burst_size)
+        .finish()
+        .unwrap();
 
-    GovernorLayer { config }
+    GovernorLayer::new(config)
 }
