@@ -21,15 +21,17 @@ function toggleTheme(): void {
   const next = getTheme() === 'dark' ? 'light' : 'dark';
   applyTheme(next);
   const btn = document.getElementById('theme-toggle');
-  if (btn) btn.innerHTML = themeIcon(next);
+  if (btn) {
+    btn.innerHTML = themeIcon(next);
+    btn.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false');
+  }
 }
 
 function themeIcon(theme: 'dark' | 'light'): string {
   return theme === 'dark'
     ? `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66
-        17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+        <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
       </svg>`
     : `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -71,7 +73,10 @@ export class App {
     `;
     const themeBtn = el('button', 'p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer');
     themeBtn.id = 'theme-toggle';
+    themeBtn.setAttribute('role', 'button');
+    themeBtn.setAttribute('tabindex', '0');
     themeBtn.setAttribute('aria-label', 'Toggle theme');
+    themeBtn.setAttribute('aria-pressed', getTheme() === 'dark' ? 'true' : 'false');
     themeBtn.innerHTML = themeIcon(getTheme());
     themeBtn.addEventListener('click', toggleTheme);
     headerInner.appendChild(brand);
@@ -172,11 +177,18 @@ export class App {
 }
 
 export function initApp(): App {
-  const run = () => { const a = new App(); a.init(); return a; };
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => run());
+    let app: App;
+    document.addEventListener('DOMContentLoaded', () => {
+      app = new App();
+      app.init();
+    });
+    return new App(); // Return placeholder instance
+  } else {
+    const app = new App();
+    app.init();
+    return app;
   }
-  return run();
 }
 
 

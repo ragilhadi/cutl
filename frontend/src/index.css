@@ -15,7 +15,7 @@
 }
 
 /* ── Enable dark-mode via the `dark` class on <html> ─────────── */
-@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant dark (&:where(.dark *));
 
 /* ── Base ────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
@@ -29,11 +29,7 @@ body {
   font-family: var(--font-sans);
   min-height: 100dvh;
   transition: background-color 0.3s, color 0.3s;
-  @apply bg-slate-50 text-slate-900;
-}
-
-.dark body {
-  @apply bg-slate-950 text-slate-100;
+  @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
 }
 
 /* ── Animations ──────────────────────────────────────────────── */

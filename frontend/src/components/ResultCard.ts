@@ -99,6 +99,8 @@ export function createResultCard(container: HTMLElement, onReset?: () => void) {
       expiryText.textContent = `Expires ${formatExpirationDate(data.expires_at)} · ${getTimeRemaining(data.expires_at)} remaining`;
     };
     update();
+    // Clear any existing interval before creating a new one
+    if (intervalId) clearInterval(intervalId);
     intervalId = setInterval(update, 60_000);
 
     // Copy button
@@ -111,15 +113,15 @@ export function createResultCard(container: HTMLElement, onReset?: () => void) {
         await copyToClipboard(data.short_url);
         copyLabel.textContent = 'Copied!';
         copyIcon.innerHTML = `<path d="M20 6 9 17l-5-5"/>`;
-        copyBtn.classList.replace('bg-indigo-600', 'bg-emerald-600');
-        copyBtn.classList.replace('hover:bg-indigo-700', 'hover:bg-emerald-700');
+        copyBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+        copyBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
         showToast('Copied to clipboard!');
         setTimeout(() => {
           copyLabel.textContent = 'Copy';
           copyIcon.innerHTML = `<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
             <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>`;
-          copyBtn.classList.replace('bg-emerald-600', 'bg-indigo-600');
-          copyBtn.classList.replace('hover:bg-emerald-700', 'hover:bg-indigo-700');
+          copyBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+          copyBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
         }, 2000);
       } catch {
         showToast('Failed to copy', 'error');
@@ -146,7 +148,12 @@ export function createResultCard(container: HTMLElement, onReset?: () => void) {
 }
 
 function escapeAttr(value: string): string {
-  return value.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 
