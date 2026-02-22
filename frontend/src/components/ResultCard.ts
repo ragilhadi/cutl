@@ -1,4 +1,6 @@
 import { copyToClipboard, formatExpirationDate, getTimeRemaining } from '../utils/clipboard';
+import { fetchAnalytics } from '../api/client';
+import { renderAnalytics } from './AnalyticsCard';
 import type { ShortenResponse } from '../api/types';
 
 // ── Toast ─────────────────────────────────────────────────────────
@@ -90,6 +92,23 @@ export function createResultCard(container: HTMLElement, onReset?: () => void) {
             Shorten another
           </button>` : ''}
         </div>
+
+        <!-- Analytics -->
+        <div class="pt-2 border-t border-emerald-200 dark:border-emerald-800">
+          <button id="analytics-btn" type="button"
+            class="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400
+                   hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer
+                   disabled:opacity-50 disabled:cursor-not-allowed">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" x2="18" y1="20" y2="10"/>
+              <line x1="12" x2="12" y1="20" y2="4"/>
+              <line x1="6" x2="6" y1="20" y2="14"/>
+            </svg>
+            <span id="analytics-btn-label">Analytics</span>
+          </button>
+          <div id="analytics-container"></div>
+        </div>
       </div>
     `;
 
@@ -131,6 +150,33 @@ export function createResultCard(container: HTMLElement, onReset?: () => void) {
     // Reset button
     const resetBtn = wrapper.querySelector('#reset-btn');
     resetBtn?.addEventListener('click', () => onReset?.());
+
+    // Analytics button
+    const analyticsBtn = wrapper.querySelector('#analytics-btn') as HTMLButtonElement;
+    const analyticsBtnLabel = wrapper.querySelector('#analytics-btn-label') as HTMLElement;
+    const analyticsContainer = wrapper.querySelector('#analytics-container') as HTMLElement;
+    let analyticsLoaded = false;
+
+    analyticsBtn.addEventListener('click', async () => {
+      if (analyticsLoaded) {
+        const nowHidden = analyticsContainer.classList.toggle('hidden');
+        analyticsBtnLabel.textContent = nowHidden ? 'Analytics' : 'Hide analytics';
+        return;
+      }
+      analyticsBtnLabel.textContent = 'Loading…';
+      analyticsBtn.disabled = true;
+      try {
+        const analyticsData = await fetchAnalytics(data.code);
+        renderAnalytics(analyticsContainer, analyticsData);
+        analyticsBtnLabel.textContent = 'Hide analytics';
+        analyticsLoaded = true;
+      } catch {
+        analyticsBtnLabel.textContent = 'Analytics';
+        showToast('Failed to load analytics', 'error');
+      } finally {
+        analyticsBtn.disabled = false;
+      }
+    });
   }
 
   return {
