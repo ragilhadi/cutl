@@ -3,9 +3,18 @@
 //! Handles all incoming HTTP requests for creating and redirecting short links.
 
 use crate::{
-    database::{code_exists, delete_link, get_link, insert_link},
-    models::{ApiError, AppState, ShortenRequest, ShortenResponse},
-    utils::{generate_code, now_unix, parse_ttl, validate_code, validate_url},
+    database::{
+        code_exists, count_visits, delete_link, get_link, insert_link, insert_visit, recent_visits,
+        visits_by_country, visits_by_referer, visits_daily,
+    },
+    models::{
+        AnalyticsResponse, ApiError, AppState, CountStat, DailyStat, ShortenRequest,
+        ShortenResponse,
+    },
+    utils::{
+        extract_client_ip, generate_code, now_unix, parse_ttl, resolve_geo, validate_code,
+        validate_url,
+    },
 };
 use axum::{
     extract::{Path, State},
@@ -123,6 +132,7 @@ pub async fn shorten(
 pub async fn redirect(
     State(state): State<AppState>,
     Path(code): Path<String>,
+    headers: axum::http::HeaderMap,
 ) -> Result<Redirect, ApiError> {
     // Validate code format (basic check)
     if code.is_empty() || code.len() > 32 {
@@ -144,6 +154,35 @@ pub async fn redirect(
 
                 return Err(ApiError::not_found("Short link has expired"));
             }
+
+            // Record visit (best-effort, don't fail redirect on analytics error)
+            let ip = extract_client_ip(&headers);
+            let (country, city) = if let (Some(ref r), Some(ref ip_str)) = (&state.geoip, &ip) {
+                resolve_geo(r, ip_str)
+            } else {
+                (None, None)
+            };
+            let ua = headers
+                .get("user-agent")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
+            let ref_ = headers
+                .get("referer")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
+
+            insert_visit(
+                &state.db,
+                &code,
+                now_unix(),
+                ip.as_deref(),
+                country.as_deref(),
+                city.as_deref(),
+                ua.as_deref(),
+                ref_.as_deref(),
+            )
+            .await
+            .ok(); // swallow errors — redirect still completes
 
             info!("Redirecting {} to {}", code, link.original_url);
             Ok(Redirect::permanent(&link.original_url))
@@ -263,4 +302,198 @@ pub async fn shorten_noauth(
         short_url,
         expires_at,
     }))
+}
+
+/// GET /analytics/{code} – Returns visit statistics for a short link
+///
+/// # Errors
+/// - 401: Missing/invalid token (when auth is enabled)
+/// - 404: Code not found or expired
+pub async fn analytics(
+    State(state): State<AppState>,
+    Path(code): Path<String>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<AnalyticsResponse>, ApiError> {
+    // Validate auth token if configured
+    if let Some(ref token) = state.auth_token {
+        let auth_header = headers
+            .get("authorization")
+            .and_then(|h| h.to_str().ok())
+            .unwrap_or("");
+
+        if !auth_header.starts_with("Bearer ") || auth_header[7..] != *token {
+            return Err(ApiError::unauthorized(
+                "Invalid or missing authorization token",
+            ));
+        }
+    }
+
+    // Look up the link
+    let link = get_link(&state.db, &code)
+        .await
+        .map_err(|e| ApiError::internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| ApiError::not_found("Short link not found"))?;
+
+    // Check if expired
+    if now_unix() > link.expires_at {
+        return Err(ApiError::not_found("Short link has expired"));
+    }
+
+    let total_visits = count_visits(&state.db, &code)
+        .await
+        .map_err(|e| ApiError::internal(format!("Database error: {}", e)))?;
+
+    let countries = visits_by_country(&state.db, &code)
+        .await
+        .map_err(|e| ApiError::internal(format!("Database error: {}", e)))?
+        .into_iter()
+        .map(|(value, count)| CountStat { value, count })
+        .collect();
+
+    let referers = visits_by_referer(&state.db, &code)
+        .await
+        .map_err(|e| ApiError::internal(format!("Database error: {}", e)))?
+        .into_iter()
+        .map(|(value, count)| CountStat { value, count })
+        .collect();
+
+    let daily = visits_daily(&state.db, &code)
+        .await
+        .map_err(|e| ApiError::internal(format!("Database error: {}", e)))?
+        .into_iter()
+        .map(|(date, count)| DailyStat { date, count })
+        .collect();
+
+    let recent = recent_visits(&state.db, &code)
+        .await
+        .map_err(|e| ApiError::internal(format!("Database error: {}", e)))?;
+
+    Ok(Json(AnalyticsResponse {
+        code: link.code,
+        original_url: link.original_url,
+        created_at: link.created_at,
+        expires_at: link.expires_at,
+        total_visits,
+        countries,
+        referers,
+        daily,
+        recent_visits: recent,
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+        routing::get,
+        Router,
+    };
+    use sqlx::sqlite::SqlitePool;
+    use tower::ServiceExt;
+
+    async fn setup_app() -> Router {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        crate::database::run_migrations(&pool).await.unwrap();
+
+        let state = AppState {
+            db: pool,
+            base_url: "http://localhost:3000".to_string(),
+            auth_token: None,
+            geoip: None,
+        };
+
+        Router::new()
+            .route("/{code}", get(redirect))
+            .route("/analytics/{code}", get(analytics))
+            .with_state(state)
+    }
+
+    #[tokio::test]
+    async fn test_analytics_not_found() {
+        let app = setup_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/analytics/noexist")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_analytics_returns_counts() {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        crate::database::run_migrations(&pool).await.unwrap();
+
+        // Create a link that expires far in the future
+        crate::database::insert_link(
+            &pool,
+            "testcode",
+            "https://example.com",
+            9999999999,
+            1000000000,
+        )
+        .await
+        .unwrap();
+
+        let state = AppState {
+            db: pool,
+            base_url: "http://localhost:3000".to_string(),
+            auth_token: None,
+            geoip: None,
+        };
+
+        let app = Router::new()
+            .route("/{code}", get(redirect))
+            .route("/analytics/{code}", get(analytics))
+            .with_state(state);
+
+        // Trigger two redirects to record visits
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/testcode")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/testcode")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Call analytics endpoint
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/analytics/testcode")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(json["total_visits"], 2);
+    }
 }

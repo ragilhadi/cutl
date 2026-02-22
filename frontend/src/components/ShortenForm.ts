@@ -1,81 +1,100 @@
 import { validateUrl, validateCode, validateTtl } from '../utils/validation';
-import { getRemainingChars } from '../utils/clipboard';
 import type { ShortenRequest } from '../api/types';
 
 interface ShortenFormOptions {
   onSubmit: (request: ShortenRequest) => void;
-  isLoading?: boolean;
 }
 
-/**
- * Creates the URL shortening form component
- * @param container - DOM element to append the form to
- * @param options - Configuration options
- * @returns Object with form control methods
- */
-export function createShortenForm(
-  container: HTMLElement,
-  options: ShortenFormOptions
-) {
+const TTL_PRESETS = [
+  { label: '1h', value: '1h' },
+  { label: '1d', value: '1d' },
+  { label: '7d', value: '7d' },
+  { label: '30d', value: '30d' },
+];
+const DEFAULT_TTL = '7d';
+
+// ── Classes ──────────────────────────────────────────────────────
+const inputBase =
+  'w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 ' +
+  'px-3 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 ' +
+  'focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:border-indigo-500 dark:focus:border-indigo-400 ' +
+  'transition-colors';
+const inputError =
+  'border-red-400 dark:border-red-600 focus:ring-red-400/40 focus:border-red-400 dark:focus:border-red-500';
+const labelCls =
+  'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5';
+const helpCls =
+  'text-xs text-slate-400 dark:text-slate-500 mt-1';
+const fieldErrorCls =
+  'text-xs text-red-600 dark:text-red-400 mt-1';
+
+export function createShortenForm(container: HTMLElement, options: ShortenFormOptions) {
   const { onSubmit } = options;
 
-  // Create form HTML
-  const formHtml = `
-    <form id="shorten-form">
-      <div class="form-group">
-        <label for="url">URL to shorten *</label>
-        <input
-          type="url"
-          id="url"
-          name="url"
+  container.innerHTML = `
+    <form id="shorten-form" class="space-y-5" novalidate>
+
+      <!-- URL -->
+      <div>
+        <label for="url" class="${labelCls}">URL to shorten <span class="text-red-500">*</span></label>
+        <input type="url" id="url" name="url"
           placeholder="https://example.com/very-long-url"
-          required
           autocomplete="url"
-        >
+          class="${inputBase}" />
+        <p id="url-error" class="${fieldErrorCls} hidden"></p>
       </div>
 
-      <div class="form-group">
-        <label for="code">Custom code (optional)</label>
-        <input
-          type="text"
-          id="code"
-          name="code"
-          placeholder="my-custom-code"
+      <!-- Custom code -->
+      <div>
+        <label for="code" class="${labelCls}">Custom code <span class="font-normal text-slate-400 dark:text-slate-500">(optional)</span></label>
+        <input type="text" id="code" name="code"
+          placeholder="my-link"
           maxlength="32"
           autocomplete="off"
-        >
-        <div class="char-counter" id="code-counter">32 characters remaining</div>
-      </div>
-
-      <div class="form-group">
-        <label for="ttl">Expiration time (optional)</label>
-        <div class="ttl-presets">
-          <button type="button" class="ttl-preset-btn" data-ttl="1h">1 hour</button>
-          <button type="button" class="ttl-preset-btn" data-ttl="1d">1 day</button>
-          <button type="button" class="ttl-preset-btn active" data-ttl="7d">7 days</button>
-          <button type="button" class="ttl-preset-btn" data-ttl="30d">30 days</button>
+          class="${inputBase}" />
+        <div class="flex justify-between mt-1">
+          <p id="code-error" class="${fieldErrorCls} hidden"></p>
+          <span id="code-counter" class="text-xs text-slate-400 dark:text-slate-500 ml-auto">32 remaining</span>
         </div>
-        <input
-          type="text"
-          id="ttl"
-          name="ttl"
-          placeholder="7d"
-          value="7d"
-        >
-        <small class="help-text">
-          Format: number + unit (s/m/h/d). Example: 5m, 1h, 3d, 30d. Default: 7d
-        </small>
       </div>
 
-      <button type="submit" id="submit-btn">
+      <!-- TTL -->
+      <div>
+        <label class="${labelCls}">Expiration</label>
+        <div id="ttl-presets" class="flex gap-2 mb-2 flex-wrap">
+          ${TTL_PRESETS.map(p => `
+            <button type="button" data-ttl="${p.value}"
+              class="ttl-preset px-3 py-1.5 rounded-md text-sm font-medium border transition-colors
+                     ${p.value === DEFAULT_TTL
+                       ? 'bg-indigo-600 border-indigo-600 text-white'
+                       : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-400 dark:hover:border-indigo-500'}">
+              ${p.label}
+            </button>`).join('')}
+        </div>
+        <input type="text" id="ttl" name="ttl"
+          placeholder="7d" value="${DEFAULT_TTL}"
+          class="${inputBase}" />
+        <p class="${helpCls}">Format: 5m, 1h, 3d, 30d &mdash; min 5 min, max 30 days</p>
+        <p id="ttl-error" class="${fieldErrorCls} hidden"></p>
+      </div>
+
+      <!-- Submit -->
+      <button type="submit" id="submit-btn"
+        class="w-full py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800
+               text-white text-sm font-semibold transition-colors shadow-sm
+               disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer">
+        <span id="btn-icon" class="hidden">
+          <svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+          </svg>
+        </span>
         <span id="btn-text">Shorten URL</span>
       </button>
+
     </form>
   `;
 
-  container.innerHTML = formHtml;
-
-  // Get form elements
   const form = container.querySelector('#shorten-form') as HTMLFormElement;
   const urlInput = container.querySelector('#url') as HTMLInputElement;
   const codeInput = container.querySelector('#code') as HTMLInputElement;
@@ -83,158 +102,121 @@ export function createShortenForm(
   const codeCounter = container.querySelector('#code-counter') as HTMLElement;
   const submitBtn = container.querySelector('#submit-btn') as HTMLButtonElement;
   const btnText = container.querySelector('#btn-text') as HTMLElement;
-  const presetBtns = container.querySelectorAll('.ttl-preset-btn');
+  const btnIcon = container.querySelector('#btn-icon') as HTMLElement;
+  const presetBtns = container.querySelectorAll<HTMLButtonElement>('.ttl-preset');
 
-  let selectedTtl = '7d';
+  let selectedTtl = DEFAULT_TTL;
 
-  // Character counter for custom code
+  // ── Character counter ─────────────────────────────────────────
   codeInput.addEventListener('input', () => {
-    const remaining = getRemainingChars(codeInput.value);
-    codeCounter.textContent = `${remaining} character${remaining !== 1 ? 's' : ''} remaining`;
+    const rem = 32 - codeInput.value.length;
+    codeCounter.textContent = `${rem} remaining`;
+    
+    // Explicitly manage default (slate), warning (amber), and error (red) states
+    codeCounter.classList.remove(
+      'text-slate-400',
+      'dark:text-slate-500',
+      'text-amber-500',
+      'text-red-500',
+    );
 
-    if (remaining < 5) {
-      codeCounter.classList.add('warning');
+    if (rem === 0) {
+      codeCounter.classList.add('text-red-500');
+    } else if (rem > 0 && rem < 8) {
+      codeCounter.classList.add('text-amber-500');
     } else {
-      codeCounter.classList.remove('warning');
-    }
-
-    if (remaining === 0) {
-      codeCounter.classList.add('error');
-    } else {
-      codeCounter.classList.remove('error');
+      codeCounter.classList.add('text-slate-400', 'dark:text-slate-500');
     }
   });
 
-  // TTL input - clear preset selection when typing custom value
-  ttlInput.addEventListener('input', () => {
-    presetBtns.forEach(btn => btn.classList.remove('active'));
-  });
+  // ── TTL presets ───────────────────────────────────────────────
+  const activePresetCls = ['bg-indigo-600', 'border-indigo-600', 'text-white'];
+  const inactivePresetCls = ['bg-white', 'dark:bg-slate-800', 'border-slate-200', 'dark:border-slate-700', 'text-slate-600', 'dark:text-slate-400', 'hover:border-indigo-400', 'dark:hover:border-indigo-500'];
 
-  // TTL preset buttons
+  function setActivePreset(value: string | null) {
+    presetBtns.forEach(btn => {
+      const isActive = btn.getAttribute('data-ttl') === value;
+      // Remove all state classes first
+      btn.classList.remove(...activePresetCls, ...inactivePresetCls);
+      // Add the appropriate state classes
+      if (isActive) {
+        btn.classList.add(...activePresetCls);
+      } else {
+        btn.classList.add(...inactivePresetCls);
+      }
+    });
+  }
+
+  ttlInput.addEventListener('input', () => setActivePreset(null));
+
   presetBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-      presetBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      selectedTtl = btn.getAttribute('data-ttl') || '7d';
+      selectedTtl = btn.getAttribute('data-ttl') ?? DEFAULT_TTL;
       ttlInput.value = selectedTtl;
+      setActivePreset(selectedTtl);
+      clearFieldError(ttlInput, 'ttl-error');
     });
   });
 
-  // Form submission
+  // ── Validation helpers ────────────────────────────────────────
+  function showFieldError(input: HTMLInputElement, errorId: string, message: string) {
+    input.className = `${inputBase} ${inputError}`;
+    const errEl = container.querySelector(`#${errorId}`) as HTMLElement;
+    errEl.textContent = message;
+    errEl.classList.remove('hidden');
+  }
+
+  function clearFieldError(input: HTMLInputElement, errorId: string) {
+    input.className = inputBase;
+    const errEl = container.querySelector(`#${errorId}`) as HTMLElement;
+    errEl.classList.add('hidden');
+  }
+
+  urlInput.addEventListener('input', () => clearFieldError(urlInput, 'url-error'));
+  codeInput.addEventListener('input', () => clearFieldError(codeInput, 'code-error'));
+  ttlInput.addEventListener('input', () => clearFieldError(ttlInput, 'ttl-error'));
+
+  // ── Submit ────────────────────────────────────────────────────
   form.addEventListener('submit', (e) => {
     e.preventDefault();
 
-    // Validate all fields
-    const urlError = validateUrl(urlInput.value);
-    const codeError = validateCode(codeInput.value);
-    const ttlError = validateTtl(ttlInput.value);
+    const urlErr = validateUrl(urlInput.value);
+    const codeErr = validateCode(codeInput.value);
+    const ttlErr = validateTtl(ttlInput.value);
 
-    // If any errors, show them and don't submit
-    if (urlError || codeError || ttlError) {
-      if (urlError) showInputError(urlInput, urlError);
-      if (codeError) showInputError(codeInput, codeError);
-      if (ttlError) showInputError(ttlInput, ttlError);
+    if (urlErr || codeErr || ttlErr) {
+      if (urlErr) showFieldError(urlInput, 'url-error', urlErr);
+      if (codeErr) showFieldError(codeInput, 'code-error', codeErr);
+      if (ttlErr) showFieldError(ttlInput, 'ttl-error', ttlErr);
       return;
     }
 
-    // Clear any previous errors
-    clearAllErrors();
-
-    // Build request
-    const request: ShortenRequest = {
-      url: urlInput.value.trim(),
-    };
-
-    if (codeInput.value.trim()) {
-      request.code = codeInput.value.trim();
-    }
-
-    if (ttlInput.value.trim()) {
-      request.ttl = ttlInput.value.trim();
-    }
-
-    onSubmit(request);
+    const req: ShortenRequest = { url: urlInput.value.trim() };
+    if (codeInput.value.trim()) req.code = codeInput.value.trim();
+    if (ttlInput.value.trim()) req.ttl = ttlInput.value.trim();
+    onSubmit(req);
   });
 
-  // Clear errors when user starts typing
-  urlInput.addEventListener('input', () => clearFieldError(urlInput));
-  codeInput.addEventListener('input', () => clearFieldError(codeInput));
-  ttlInput.addEventListener('input', () => clearFieldError(ttlInput));
-
-  // Helper function to clear error for a specific field
-  function clearFieldError(input: HTMLInputElement): void {
-    input.classList.remove('error');
-    const fieldError = input.parentElement?.querySelector('.field-error');
-    if (fieldError) {
-      fieldError.remove();
-    }
-  }
-
-  // Helper function to clear all field errors
-  function clearAllErrors(): void {
-    urlInput.classList.remove('error');
-    codeInput.classList.remove('error');
-    ttlInput.classList.remove('error');
-    container.querySelectorAll('.field-error').forEach(el => el.remove());
-  }
-
-  // Helper function to show input error
-  function showInputError(input: HTMLInputElement, message: string): void {
-    input.classList.add('error');
-
-    // Remove existing error message
-    const existingError = input.parentElement?.querySelector('.field-error');
-    if (existingError) {
-      existingError.remove();
-    }
-
-    // Add error message
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'field-error';
-    errorDiv.style.color = 'var(--color-error)';
-    errorDiv.style.fontSize = 'var(--text-xs)';
-    errorDiv.style.marginTop = 'var(--spacing-1)';
-    errorDiv.textContent = message;
-    input.parentElement?.appendChild(errorDiv);
-  }
-
-  // Return control methods
+  // ── Public API ────────────────────────────────────────────────
   return {
-    /**
-     * Sets the loading state of the form
-     */
-    setLoading: (loading: boolean) => {
-      if (loading) {
-        submitBtn.disabled = true;
-        btnText.innerHTML = '<span class="spinner"></span>Shortening...';
-      } else {
-        submitBtn.disabled = false;
-        btnText.textContent = 'Shorten URL';
-      }
+    setLoading(loading: boolean) {
+      submitBtn.disabled = loading;
+      btnIcon.classList.toggle('hidden', !loading);
+      btnText.textContent = loading ? 'Shortening…' : 'Shorten URL';
     },
-
-    /**
-     * Resets the form to its initial state
-     */
-    reset: () => {
+    reset() {
       form.reset();
-      clearAllErrors();
-      codeCounter.textContent = '32 characters remaining';
-      codeCounter.classList.remove('warning', 'error');
-
-      // Reset TTL to default
-      ttlInput.value = '7d';
-      presetBtns.forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.getAttribute('data-ttl') === '7d') {
-          btn.classList.add('active');
-        }
-      });
+      clearFieldError(urlInput, 'url-error');
+      clearFieldError(codeInput, 'code-error');
+      clearFieldError(ttlInput, 'ttl-error');
+      codeCounter.textContent = '32 remaining';
+      codeCounter.className = 'text-xs text-slate-400 dark:text-slate-500 ml-auto';
+      ttlInput.value = DEFAULT_TTL;
+      selectedTtl = DEFAULT_TTL;
+      setActivePreset(DEFAULT_TTL);
     },
-
-    /**
-     * Gets the form element
-     */
     getElement: () => form,
   };
 }
+
+

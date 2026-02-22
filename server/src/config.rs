@@ -25,6 +25,10 @@ pub struct Config {
 
     /// Rate limit burst size (default: 2)
     pub rate_limit_burst: u32,
+
+    /// Optional path to a GeoLite2 .mmdb file for IP geolocation.
+    /// If None, country/city columns are stored as NULL.
+    pub geoip_db_path: Option<String>,
 }
 
 impl Config {
@@ -51,6 +55,7 @@ impl Config {
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(2),
+            geoip_db_path: env::var("GEOIP_DB_PATH").ok(),
         })
     }
 }
@@ -82,6 +87,7 @@ mod tests {
             auth_token: Some("token".to_string()),
             rate_limit: 10,
             rate_limit_burst: 2,
+            geoip_db_path: None,
         };
 
         assert_eq!(config.database_url, "sqlite:test.db");
@@ -101,6 +107,7 @@ mod tests {
             auth_token: Some("token".to_string()),
             rate_limit: 10,
             rate_limit_burst: 2,
+            geoip_db_path: None,
         };
 
         // Test Clone trait

@@ -4,6 +4,7 @@
 
 use rand::RngExt;
 use regex::Regex;
+use std::net::IpAddr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Minimum TTL in seconds (5 minutes)
@@ -142,6 +143,83 @@ pub fn parse_ttl(ttl: &str) -> anyhow::Result<i64> {
     }
 
     Ok(seconds)
+}
+
+/// Extracts the client IP from request headers (X-Forwarded-For, X-Real-IP, Forwarded)
+/// or falls back to the connection remote_addr.
+/// Returns None if IP cannot be determined.
+pub fn extract_client_ip(headers: &axum::http::HeaderMap) -> Option<String> {
+    // 1. X-Forwarded-For: take the first (leftmost) IP
+    if let Some(xff) = headers.get("x-forwarded-for") {
+        if let Ok(val) = xff.to_str() {
+            let first = val.split(',').next().unwrap_or("").trim();
+            if !first.is_empty() {
+                return Some(first.to_owned());
+            }
+        }
+    }
+
+    // 2. X-Real-IP
+    if let Some(xri) = headers.get("x-real-ip") {
+        if let Ok(val) = xri.to_str() {
+            let trimmed = val.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_owned());
+            }
+        }
+    }
+
+    // 3. Forwarded: parse for= field
+    if let Some(fwd) = headers.get("forwarded") {
+        if let Ok(val) = fwd.to_str() {
+            for part in val.split(';') {
+                let part = part.trim();
+                if let Some(stripped) = part.strip_prefix("for=") {
+                    let ip = stripped
+                        .trim_matches('"')
+                        .trim_matches('[')
+                        .trim_matches(']');
+                    // Remove port from IPv6 addresses like [::1]:port
+                    let ip = ip.split(']').next().unwrap_or(ip);
+                    if !ip.is_empty() {
+                        return Some(ip.to_owned());
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Resolves country and city from an IP address using a maxminddb reader.
+/// Returns (country_iso, city_name) — both may be None on lookup failure.
+pub fn resolve_geo(
+    reader: &maxminddb::Reader<Vec<u8>>,
+    ip: &str,
+) -> (Option<String>, Option<String>) {
+    let ip_addr: IpAddr = match ip.parse() {
+        Ok(a) => a,
+        Err(_) => return (None, None),
+    };
+
+    match reader.lookup::<maxminddb::geoip2::City>(ip_addr) {
+        Ok(city) => {
+            let country = city
+                .country
+                .as_ref()
+                .and_then(|c| c.iso_code)
+                .map(str::to_owned);
+            let city_name = city
+                .city
+                .as_ref()
+                .and_then(|c| c.names.as_ref())
+                .and_then(|n| n.get("en"))
+                .map(|s| (*s).to_owned());
+            (country, city_name)
+        }
+        Err(_) => (None, None),
+    }
 }
 
 #[cfg(test)]
@@ -289,5 +367,25 @@ mod tests {
     fn test_constants() {
         assert_eq!(MIN_TTL_SECONDS, 300); // 5 minutes
         assert_eq!(MAX_TTL_SECONDS, 30 * 24 * 60 * 60); // 30 days
+    }
+
+    #[test]
+    fn test_extract_client_ip_forwarded_for() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("x-forwarded-for", "1.2.3.4, 5.6.7.8".parse().unwrap());
+        assert_eq!(extract_client_ip(&headers), Some("1.2.3.4".to_string()));
+    }
+
+    #[test]
+    fn test_extract_client_ip_real_ip() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("x-real-ip", "10.0.0.1".parse().unwrap());
+        assert_eq!(extract_client_ip(&headers), Some("10.0.0.1".to_string()));
+    }
+
+    #[test]
+    fn test_extract_client_ip_missing() {
+        let headers = axum::http::HeaderMap::new();
+        assert_eq!(extract_client_ip(&headers), None);
     }
 }

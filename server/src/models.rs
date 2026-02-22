@@ -7,6 +7,7 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 /// Application state shared across all request handlers
 #[derive(Clone)]
@@ -14,6 +15,8 @@ pub struct AppState {
     pub db: sqlx::Pool<sqlx::Sqlite>,
     pub base_url: String,
     pub auth_token: Option<String>,
+    /// Optional GeoIP reader. None when GEOIP_DB_PATH is not configured.
+    pub geoip: Option<Arc<maxminddb::Reader<Vec<u8>>>>,
 }
 
 /// Request body for creating a shortened URL
@@ -108,6 +111,46 @@ pub struct Link {
     pub original_url: String,
     pub expires_at: i64,
     pub created_at: i64,
+}
+
+/// Analytics response for a short link
+#[derive(Debug, Serialize)]
+pub struct AnalyticsResponse {
+    pub code: String,
+    pub original_url: String,
+    pub created_at: i64,
+    pub expires_at: i64,
+    pub total_visits: i64,
+    pub countries: Vec<CountStat>,
+    pub referers: Vec<CountStat>,
+    pub daily: Vec<DailyStat>,
+    pub recent_visits: Vec<VisitRow>,
+}
+
+/// A count grouped by a string value (used for countries and referers)
+#[derive(Debug, Serialize)]
+pub struct CountStat {
+    pub value: Option<String>,
+    pub count: i64,
+}
+
+/// Daily visit count
+#[derive(Debug, Serialize)]
+pub struct DailyStat {
+    /// Date in "YYYY-MM-DD" format
+    pub date: String,
+    pub count: i64,
+}
+
+/// A single visit record
+#[derive(Debug, Serialize)]
+pub struct VisitRow {
+    pub visited_at: i64,
+    pub ip: Option<String>,
+    pub country: Option<String>,
+    pub city: Option<String>,
+    pub user_agent: Option<String>,
+    pub referer: Option<String>,
 }
 
 #[cfg(test)]
