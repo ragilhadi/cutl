@@ -30,4 +30,4 @@ governor = "0.10"
 tower_governor = "0.8"
 
 # GeoIP
-maxminddb = "0.24"
+maxminddb = "0.27"
