@@ -203,22 +203,18 @@ pub fn resolve_geo(
         Err(_) => return (None, None),
     };
 
-    match reader.lookup::<maxminddb::geoip2::City>(ip_addr) {
-        Ok(city) => {
-            let country = city
-                .country
-                .as_ref()
-                .and_then(|c| c.iso_code)
-                .map(str::to_owned);
-            let city_name = city
-                .city
-                .as_ref()
-                .and_then(|c| c.names.as_ref())
-                .and_then(|n| n.get("en"))
-                .map(|s| (*s).to_owned());
+    let lookup = match reader.lookup(ip_addr) {
+        Ok(r) => r,
+        Err(_) => return (None, None),
+    };
+
+    match lookup.decode::<maxminddb::geoip2::City>() {
+        Ok(Some(city)) => {
+            let country = city.country.iso_code.map(str::to_owned);
+            let city_name = city.city.names.english.map(str::to_owned);
             (country, city_name)
         }
-        Err(_) => (None, None),
+        _ => (None, None),
     }
 }
 
